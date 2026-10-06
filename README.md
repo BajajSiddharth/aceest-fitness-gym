@@ -24,6 +24,8 @@ aceest-fitness-gym/
 ├── Jenkinsfile             # Declarative Jenkins build & quality gate pipeline
 ├── requirements.txt        # Python production & testing dependencies
 └── README.md               # Setup and architecture documentation
+```
+
 
 ## 1. Local Setup and Execution Instructions
 
