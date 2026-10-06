@@ -2,9 +2,9 @@ name: ACEest Fitness CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ dev, master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ dev, master ]
 
 jobs:
   build-and-test:
