@@ -74,12 +74,6 @@ pipeline {
             steps {
                 echo "Assembling Docker image ${APP_IMAGE}:${IMAGE_TAG}..."
                 sh '''
-                    # Self-heal docker socket permissions if not writable
-                    if [ ! -w /var/run/docker.sock ]; then
-                        echo "Fixing Docker socket permissions..."
-                        sudo chmod 666 /var/run/docker.sock || true
-                    fi
-
                     docker build -t ${APP_IMAGE}:${IMAGE_TAG} .
                 '''
             }
@@ -89,10 +83,6 @@ pipeline {
             steps {
                 echo "Running unit tests in containerized runner..."
                 sh '''
-                    if [ ! -w /var/run/docker.sock ]; then
-                        sudo chmod 666 /var/run/docker.sock || true
-                    fi
-
                     docker run --rm ${APP_IMAGE}:${IMAGE_TAG} pytest -v tests/
                 '''
             }
@@ -120,13 +110,37 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
                     sh '''
-                        kubectl apply -f k8s/base/deployment-rolling.yaml
-                        kubectl set image deployment/aceest-rolling aceest=$DH_USER/${APP_IMAGE}:${APP_VERSION}
-                        kubectl set env deployment/aceest-rolling APP_VERSION=${APP_VERSION}
-                        # Automatic rollback to the last stable revision if the rollout does not become healthy
-                        if ! kubectl rollout status deployment/aceest-rolling --timeout=120s; then
-                            echo "Rollout failed - rolling back"
-                            kubectl rollout undo deployment/aceest-rolling
+                        set -eu
+
+                        previous_revision=""
+                        existing_deployment=$(kubectl get deployment aceest-rolling --ignore-not-found -o name)
+
+                        if [ -n "$existing_deployment" ]; then
+                            kubectl rollout status deployment/aceest-rolling --timeout=120s
+                            previous_revision=$(kubectl get deployment aceest-rolling \
+                                -o go-template='{{index .metadata.annotations "deployment.kubernetes.io/revision"}}')
+                            case "$previous_revision" in
+                                ''|*[!0-9]*)
+                                    echo "Cannot determine the healthy deployment revision." >&2
+                                    exit 1
+                                    ;;
+                            esac
+                        fi
+
+                        sed \
+                            -e "s#image: .*#image: $DH_USER/${APP_IMAGE}:build-${IMAGE_TAG}#" \
+                            -e "s#1[.]0[.]0#${APP_VERSION}#g" \
+                            k8s/base/deployment-rolling.yaml | kubectl apply -f -
+
+                        if ! kubectl rollout status deployment/aceest-rolling --timeout=180s; then
+                            if [ -n "$previous_revision" ]; then
+                                echo "Rollout failed - restoring healthy revision $previous_revision."
+                                kubectl rollout undo deployment/aceest-rolling \
+                                    --to-revision="$previous_revision"
+                                kubectl rollout status deployment/aceest-rolling --timeout=180s
+                            else
+                                echo "Initial deployment failed; no previous revision exists." >&2
+                            fi
                             exit 1
                         fi
                     '''
