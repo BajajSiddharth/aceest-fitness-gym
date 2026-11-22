@@ -160,9 +160,9 @@ The project incorporates two automated validation pipelines to guarantee zero-de
 
 ## 5. Kubernetes Deployment Strategies
 
-Manifests live in `k8s/` (rolling, blue-green, canary, shadow, A/B). Replace `DOCKERHUB_USER` and deploy:
+Manifests live in `k8s/` (rolling, blue-green, canary, shadow, A/B) and use `bajaj1995/aceest-fitness` images. Publish the required `1.0.0` and `2.0.0` tags before deploying:
 ```bash
-DOCKERHUB_USER=<user> ./k8s/deploy.sh all   # or a single strategy name
+bash k8s/deploy.sh all   # or a single strategy name
 minikube service list
 ```
 See [docs/REPORT.md](docs/REPORT.md) for the strategy/rollback table and architecture summary.

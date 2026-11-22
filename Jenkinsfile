@@ -12,7 +12,7 @@ pipeline {
     }
 
     environment {
-        DOCKERHUB_USER = 'DOCKERHUB_USER'
+        DOCKERHUB_USER = 'bajaj1995'
         APP_IMAGE = 'aceest-fitness'
         IMAGE_TAG = "${BUILD_NUMBER}"
     }

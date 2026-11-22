@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Usage: DOCKERHUB_USER=<user> ./k8s/deploy.sh <rolling|blue-green|canary|shadow|ab-testing|all>
+# Usage: bash k8s/deploy.sh <rolling|blue-green|canary|shadow|ab-testing|all>
 set -euo pipefail
-: "${DOCKERHUB_USER:?set DOCKERHUB_USER}"
 cd "$(dirname "$0")"
 
 apply() {
-  sed "s#DOCKERHUB_USER#${DOCKERHUB_USER}#g" "$1" | kubectl apply -f -
+  kubectl apply -f "$1"
 }
 
 case "${1:-all}" in

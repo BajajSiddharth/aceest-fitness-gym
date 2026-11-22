@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: aceest
-          image: DOCKERHUB_USER/aceest-fitness:1.0.0
+          image: bajaj1995/aceest-fitness:1.0.0
           ports:
             - containerPort: 5000
           env:
