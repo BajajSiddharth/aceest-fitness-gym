@@ -3,7 +3,7 @@ import sqlite3
 from flask import Flask, jsonify, request
 
 DATABASE = os.getenv("DB_NAME", "aceest_fitness.db")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
 
 # Core fitness program specifications ported from baseline
 PROGRAMS = {
