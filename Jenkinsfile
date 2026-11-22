@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'APP_VERSION', defaultValue: '1.0.0', description: 'Semantic version used as Docker Hub tag')
+        string(name: 'APP_VERSION', defaultValue: '2.0.0', description: 'Semantic version used as Docker Hub tag')
         booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false, description: 'Deploy to Kubernetes (rolling update) after push')
     }
 
