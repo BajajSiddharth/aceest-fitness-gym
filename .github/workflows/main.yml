@@ -42,3 +42,20 @@ jobs:
       - name: Stage 3 - Automated In-Container Testing
         run: |
           docker run --rm aceest-fitness:latest pytest -v tests/
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: bajaj1995
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Stage 4 - Publish tested image to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_IMAGE: bajaj1995/aceest-fitness
+        run: |
+          docker tag aceest-fitness:latest "${DOCKERHUB_IMAGE}:sha-${GITHUB_SHA}"
+          docker tag aceest-fitness:latest "${DOCKERHUB_IMAGE}:latest"
+          docker push "${DOCKERHUB_IMAGE}:sha-${GITHUB_SHA}"
+          docker push "${DOCKERHUB_IMAGE}:latest"

@@ -141,6 +141,10 @@ The project incorporates two automated validation pipelines to guarantee zero-de
   2. **Build & Lint:** Executes `flake8` across application source directories (`app/`, `tests/`) to block syntax regressions and undefined variables.
   3. **Docker Image Assembly:** Assembles the multi-stage, hardened Docker container.
   4. **Automated Container Testing:** Runs `pytest` inside the newly built Docker container to confirm environmental parity and test stability.
+  5. **Docker Hub Publishing:** After tests pass on a push to `main`, publishes the tested image as `bajaj1995/aceest-fitness:latest` and `bajaj1995/aceest-fitness:sha-<commit SHA>`. Pull requests and pushes to `dev` do not publish images.
+
+* **Publishing setup:** Create the Docker Hub repository `bajaj1995/aceest-fitness`. In GitHub, go to **Settings > Secrets and variables > Actions > New repository secret** and add `DOCKERHUB_TOKEN`, containing a Docker Hub access token for `bajaj1995` with push permission. Do not put the token in source code. Jenkins credentials are separate and are not available to GitHub Actions.
+* **Release tags:** This workflow does not publish `1.0.0` or `2.0.0`; publish those tags through the Jenkins `APP_VERSION` parameter before deploying the corresponding Kubernetes manifests. GitHub Actions publishing does not run the Jenkins SonarQube quality gate.
 
 ### Jenkins Build & Quality Gate (`Jenkinsfile`)
 * **Role:** Acts as the dedicated build server and secondary quality gate in an automated pipeline environment.
