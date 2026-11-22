@@ -62,13 +62,23 @@ metadata:
   name: aceest-ab-nginx
 data:
   default.conf: |
-    map "$http_x_variant$cookie_variant" $backend {
-      default aceest-variant-a;
-      ~*B     aceest-variant-b;
+    upstream variant_a {
+      server aceest-variant-a:80;
+    }
+    upstream variant_b {
+      server aceest-variant-b:80;
+    }
+    map $http_x_variant $variant {
+      default $cookie_variant;
+      A A;
+      B B;
+    }
+    map $variant $backend {
+      default variant_a;
+      B variant_b;
     }
     server {
       listen 80;
-      resolver kube-dns.kube-system.svc.cluster.local valid=10s;
       location / {
         proxy_pass http://$backend;
       }
