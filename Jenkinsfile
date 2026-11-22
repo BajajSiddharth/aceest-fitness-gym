@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    triggers {
-        // Poll GitHub every 2 minutes (webhook can be added on top)
-        pollSCM('H/2 * * * *')
-    }
-
     parameters {
         string(name: 'APP_VERSION', defaultValue: '1.0.0', description: 'Semantic version used as Docker Hub tag')
         booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false, description: 'Deploy to Kubernetes (rolling update) after push')
@@ -50,22 +45,14 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('SonarQube Analysis & Quality Gate') {
             steps {
                 // 'sonarqube' = server name configured in Manage Jenkins > System; 'sonar-scanner' = tool name
                 withSonarQubeEnv('sonarqube') {
                     script {
                         def scannerHome = tool 'sonar-scanner'
-                        sh "${scannerHome}/bin/sonar-scanner"
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"
                     }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
                 }
             }
         }

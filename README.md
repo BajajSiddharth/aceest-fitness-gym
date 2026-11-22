@@ -149,7 +149,7 @@ The project incorporates two automated validation pipelines to guarantee zero-de
 ### Jenkins Build & Quality Gate (`Jenkinsfile`)
 * **Role:** Acts as the dedicated build server and secondary quality gate in an automated pipeline environment.
 * **Workflow Stages:**
-  1. **Checkout SCM:** Clones the latest commit from GitHub using webhooks or SCM polling.
+  1. **Checkout SCM:** Clones the latest commit from the branch configured in Jenkins when a build is started.
   2. **Static Lint Analysis:** Initializes an isolated environment and executes `flake8 app/ tests/`.
   3. **Docker Image Assembly:** Builds the immutable container image tagged dynamically with `${BUILD_NUMBER}`.
   4. **Containerized Pytest:** Executes the test suite inside the runtime container artifact:
@@ -158,7 +158,11 @@ The project incorporates two automated validation pipelines to guarantee zero-de
      ```
   5. **Post Actions / Workspace Cleanup:** Runs `cleanWs()` after execution to maintain host runner health and prevent disk bloat.
 
-  The Jenkinsfile additionally polls SCM every 2 minutes, runs SonarQube analysis with a Quality Gate, pushes versioned images to Docker Hub (credential ID `dockerhub-creds`), and optionally deploys the tested `build-${BUILD_NUMBER}` image with `APP_VERSION` in one rolling update (`DEPLOY_TO_K8S` parameter). Before updating, it records the existing healthy revision; a failed rollout restores that revision and waits for recovery. A failed initial deployment has no previous revision to restore and fails the build.
+  SCM polling is temporarily disabled for feature-branch testing. Use **Build with Parameters** in Jenkins; manually disable any previously configured **Poll SCM** trigger until Jenkins has loaded this Jenkinsfile. Restore an approved automatic trigger after testing to meet the assignment's CI automation requirement.
+
+  The **SonarQube Analysis & Quality Gate** stage uses `sonar.qualitygate.wait=true` and `sonar.qualitygate.timeout=300`. The scanner polls SonarQube for up to 300 seconds after submission and fails the stage if the quality gate fails or the wait times out. No webhook or separate `waitForQualityGate` step is needed; SonarQube webhook destination validation can stay enabled. Scanner polling occupies the Jenkins executor while waiting.
+
+  After the quality gate passes, Jenkins builds/tests the image, pushes versioned images to Docker Hub (credential ID `dockerhub-creds`), and optionally deploys the tested `build-${BUILD_NUMBER}` image with `APP_VERSION` in one rolling update (`DEPLOY_TO_K8S` parameter). Before updating, it records the existing healthy revision; a failed rollout restores that revision and waits for recovery. A failed initial deployment has no previous revision to restore and fails the build.
 
 ---
 
