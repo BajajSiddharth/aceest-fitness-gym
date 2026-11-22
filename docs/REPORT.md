@@ -4,8 +4,8 @@
 ```
 Developer -> GitHub (dev/main, tags v1.0.0, v2.0.0)
               |-> GitHub Actions: flake8 -> pytest+coverage -> docker build -> pytest in container
-              |-> Jenkins (pollSCM every 2 min):
-                    Checkout -> flake8 -> pytest+coverage -> SonarQube scan -> Quality Gate
+              |-> Jenkins (manual builds during feature-branch testing):
+                    Checkout -> flake8 -> pytest+coverage -> SonarQube scan + polled Quality Gate
                     -> docker build -> pytest in container -> push to Docker Hub
                     -> kubectl rolling update (auto `rollout undo` on failure)
 Docker Hub (<user>/aceest-fitness:1.0.0, 2.0.0, build-N, latest)
@@ -14,6 +14,7 @@ Docker Hub (<user>/aceest-fitness:1.0.0, 2.0.0, build-N, latest)
 * **Application**: Flask REST API (`app/app.py`); version reported on `/` via `APP_VERSION`.
 * **Container**: multi-stage, non-root image with HEALTHCHECK.
 * **Quality**: Pytest (9 tests), flake8, SonarQube (`sonar-project.properties`, coverage from `coverage.xml`).
+* **Quality gate execution**: The scanner uses `sonar.qualitygate.wait=true` with a 300-second wait timeout, so a failed gate or timeout blocks subsequent stages without a webhook. SCM polling is temporarily disabled for manual feature testing; restore an approved automatic trigger before claiming full Jenkins CI automation.
 
 ## 2. Deployment strategies (k8s/)
 | Strategy | Manifest | NodePort | Rollback |
