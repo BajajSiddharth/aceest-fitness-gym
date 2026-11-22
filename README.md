@@ -153,3 +153,19 @@ The project incorporates two automated validation pipelines to guarantee zero-de
      docker run --rm aceest-fitness:${BUILD_NUMBER} pytest -v tests/
      ```
   5. **Post Actions / Workspace Cleanup:** Runs `cleanWs()` after execution to maintain host runner health and prevent disk bloat.
+
+  The Jenkinsfile additionally polls SCM every 2 minutes, runs SonarQube analysis with a Quality Gate, pushes versioned images to Docker Hub (credential ID `dockerhub-creds`), and optionally deploys the tested `build-${BUILD_NUMBER}` image with `APP_VERSION` in one rolling update (`DEPLOY_TO_K8S` parameter). Before updating, it records the existing healthy revision; a failed rollout restores that revision and waits for recovery. A failed initial deployment has no previous revision to restore and fails the build.
+
+---
+
+## 5. Kubernetes Deployment Strategies
+
+Manifests live in `k8s/` (rolling, blue-green, canary, shadow, A/B) and use `bajaj1995/aceest-fitness` images. Publish the required `1.0.0` and `2.0.0` tags before deploying:
+```bash
+bash k8s/deploy.sh all   # or a single strategy name
+minikube service list
+```
+See [docs/REPORT.md](docs/REPORT.md) for the strategy/rollback table and architecture summary.
+
+## 6. Versioning
+Release versions are git-tagged (`v1.0.0`, `v2.0.0`) and pushed as Docker Hub tags of the same number.

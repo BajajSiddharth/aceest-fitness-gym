@@ -1,7 +1,18 @@
 pipeline {
     agent any
 
+    triggers {
+        // Poll GitHub every 2 minutes (webhook can be added on top)
+        pollSCM('H/2 * * * *')
+    }
+
+    parameters {
+        string(name: 'APP_VERSION', defaultValue: '1.0.0', description: 'Semantic version used as Docker Hub tag')
+        booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false, description: 'Deploy to Kubernetes (rolling update) after push')
+    }
+
     environment {
+        DOCKERHUB_USER = 'bajaj1995'
         APP_IMAGE = 'aceest-fitness'
         IMAGE_TAG = "${BUILD_NUMBER}"
     }
@@ -26,16 +37,43 @@ pipeline {
             }
         }
 
+        stage('Unit Tests & Coverage') {
+            steps {
+                sh '''
+                    . venv/bin/activate
+                    pip install -r requirements.txt
+                    pytest --cov=app --cov-report=xml:coverage.xml --junitxml=pytest-report.xml tests/
+                '''
+            }
+            post {
+                always { junit 'pytest-report.xml' }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                // 'sonarqube' = server name configured in Manage Jenkins > System; 'sonar-scanner' = tool name
+                withSonarQubeEnv('sonarqube') {
+                    script {
+                        def scannerHome = tool 'sonar-scanner'
+                        sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
         stage('Docker Image Assembly') {
             steps {
                 echo "Assembling Docker image ${APP_IMAGE}:${IMAGE_TAG}..."
                 sh '''
-                    # Self-heal docker socket permissions if not writable
-                    if [ ! -w /var/run/docker.sock ]; then
-                        echo "Fixing Docker socket permissions..."
-                        sudo chmod 666 /var/run/docker.sock || true
-                    fi
-
                     docker build -t ${APP_IMAGE}:${IMAGE_TAG} .
                 '''
             }
@@ -45,12 +83,68 @@ pipeline {
             steps {
                 echo "Running unit tests in containerized runner..."
                 sh '''
-                    if [ ! -w /var/run/docker.sock ]; then
-                        sudo chmod 666 /var/run/docker.sock || true
-                    fi
-
                     docker run --rm ${APP_IMAGE}:${IMAGE_TAG} pytest -v tests/
                 '''
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+                    sh '''
+                        echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+                        docker tag ${APP_IMAGE}:${IMAGE_TAG} $DH_USER/${APP_IMAGE}:${APP_VERSION}
+                        docker tag ${APP_IMAGE}:${IMAGE_TAG} $DH_USER/${APP_IMAGE}:build-${IMAGE_TAG}
+                        docker tag ${APP_IMAGE}:${IMAGE_TAG} $DH_USER/${APP_IMAGE}:latest
+                        docker push $DH_USER/${APP_IMAGE}:${APP_VERSION}
+                        docker push $DH_USER/${APP_IMAGE}:build-${IMAGE_TAG}
+                        docker push $DH_USER/${APP_IMAGE}:latest
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes (Rolling Update)') {
+            when { expression { params.DEPLOY_TO_K8S } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+                    sh '''
+                        set -eu
+
+                        previous_revision=""
+                        existing_deployment=$(kubectl get deployment aceest-rolling --ignore-not-found -o name)
+
+                        if [ -n "$existing_deployment" ]; then
+                            kubectl rollout status deployment/aceest-rolling --timeout=120s
+                            previous_revision=$(kubectl get deployment aceest-rolling \
+                                -o go-template='{{index .metadata.annotations "deployment.kubernetes.io/revision"}}')
+                            case "$previous_revision" in
+                                ''|*[!0-9]*)
+                                    echo "Cannot determine the healthy deployment revision." >&2
+                                    exit 1
+                                    ;;
+                            esac
+                        fi
+
+                        sed \
+                            -e "s#image: .*#image: $DH_USER/${APP_IMAGE}:build-${IMAGE_TAG}#" \
+                            -e "s#1[.]0[.]0#${APP_VERSION}#g" \
+                            k8s/base/deployment-rolling.yaml | kubectl apply -f -
+
+                        if ! kubectl rollout status deployment/aceest-rolling --timeout=180s; then
+                            if [ -n "$previous_revision" ]; then
+                                echo "Rollout failed - restoring healthy revision $previous_revision."
+                                kubectl rollout undo deployment/aceest-rolling \
+                                    --to-revision="$previous_revision"
+                                kubectl rollout status deployment/aceest-rolling --timeout=180s
+                            else
+                                echo "Initial deployment failed; no previous revision exists." >&2
+                            fi
+                            exit 1
+                        fi
+                    '''
+                }
             }
         }
     }

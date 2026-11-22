@@ -32,6 +32,9 @@ jobs:
           # Treat all warnings as exit-zero
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
+      - name: Stage 1b - Unit tests with coverage
+        run: pytest --cov=app --cov-report=xml tests/
+
       - name: Stage 2 - Docker Image Assembly
         run: |
           docker build -t aceest-fitness:latest .
